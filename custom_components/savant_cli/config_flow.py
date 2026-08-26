@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import ipaddress
 import logging
 from typing import Any
@@ -9,22 +10,14 @@ from typing import Any
 import voluptuous as vol
 
 from homeassistant.components.zeroconf import ZeroconfServiceInfo
-from homeassistant.config_entries import ConfigFlow, ConfigFlowResult
+from homeassistant.config_entries import ConfigEntry, ConfigFlow, ConfigFlowResult
 from homeassistant.const import CONF_HOST, CONF_PORT
+from homeassistant.data_entry_flow import FlowResultType
 from homeassistant.helpers import config_validation as cv
-from homeassistant.helpers.typing import DiscoveryInfoType
 
-from .const import DEFAULT_PORT, DOMAIN
+from .const import DEFAULT_PORT, DOMAIN, TIMEOUT
 
 _LOGGER = logging.getLogger(__name__)
-
-_ZEROCONF_TXT_KEYS = {
-    "model": "mn",
-    "serial": "sn",
-    "fw": "fw",
-    "board_id": "board_id",
-    "pn": "pn",
-}
 
 _STEP_USER_SCHEMA = vol.Schema(
     {
@@ -32,6 +25,11 @@ _STEP_USER_SCHEMA = vol.Schema(
         vol.Required(CONF_PORT, default=DEFAULT_PORT): int,
     }
 )
+
+_STEP_USER_DATA_DESCRIPTION = {
+    CONF_HOST: "Host",
+    CONF_PORT: "Port",
+}
 
 
 def _is_cli_model(txt: dict) -> bool:
@@ -78,6 +76,26 @@ def _discovery_host(info: ZeroconfServiceInfo) -> str | None:
     return None
 
 
+async def _test_connection(host: str, port: int) -> str | None:
+    """Test TCP connectivity to the thermostat. Returns error message or None."""
+    try:
+        _, writer = await asyncio.wait_for(
+            asyncio.open_connection(host, port),
+            timeout=TIMEOUT,
+        )
+        writer.close()
+        try:
+            await writer.wait_closed()
+        except Exception:
+            pass
+        return None
+    except TimeoutError:
+        return "cannot_connect"
+    except OSError as ex:
+        _LOGGER.debug("Connection test failed for %s:%s: %s", host, port, ex)
+        return "cannot_connect"
+
+
 class SavantCLIConfigFlow(ConfigFlow, domain=DOMAIN):
     """Handle a config flow for Savant CLI thermostat."""
 
@@ -96,16 +114,21 @@ class SavantCLIConfigFlow(ConfigFlow, domain=DOMAIN):
         if user_input is not None:
             host = user_input[CONF_HOST]
             port = user_input[CONF_PORT]
-            title = f"Savant CLI Thermostat ({host})"
 
-            await self.async_set_unique_id(f"cli_{host}")
-            self._abort_if_unique_id_configured()
+            error = await _test_connection(host, port)
+            if error is not None:
+                errors["base"] = error
+            else:
+                await self.async_set_unique_id(f"cli_{host}")
+                self._abort_if_unique_id_configured()
 
-            return self.async_create_entry(title=title, data=user_input)
+                title = f"Savant CLI Thermostat ({host})"
+                return self.async_create_entry(title=title, data=user_input)
 
         return self.async_show_form(
             step_id="user",
             data_schema=_STEP_USER_SCHEMA,
+            data_description=_STEP_USER_DATA_DESCRIPTION,
             errors=errors,
         )
 
@@ -167,4 +190,39 @@ class SavantCLIConfigFlow(ConfigFlow, domain=DOMAIN):
                 "name": self._discovery_info.get("model", "CLI-W2xx"),
                 "host": self._discovery_info[CONF_HOST],
             },
+        )
+
+    async def async_step_reconfigure(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Handle reconfiguration."""
+        errors: dict[str, str] = {}
+        reconfigure_entry = self._get_reconfigure_entry()
+
+        if user_input is not None:
+            host = user_input[CONF_HOST]
+            port = user_input[CONF_PORT]
+
+            error = await _test_connection(host, port)
+            if error is not None:
+                errors["base"] = error
+            else:
+                title = f"Savant CLI Thermostat ({host})"
+                return self.async_update_reload_and_abort(
+                    reconfigure_entry,
+                    title=title,
+                    data=user_input,
+                )
+
+        return self.async_show_form(
+            step_id="reconfigure",
+            data_schema=self.add_suggested_values_to_schema(
+                _STEP_USER_SCHEMA,
+                {
+                    CONF_HOST: reconfigure_entry.data.get(CONF_HOST, ""),
+                    CONF_PORT: reconfigure_entry.data.get(CONF_PORT, DEFAULT_PORT),
+                },
+            ),
+            data_description=_STEP_USER_DATA_DESCRIPTION,
+            errors=errors,
         )

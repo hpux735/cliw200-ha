@@ -1,0 +1,94 @@
+rules:
+  config_flow: done
+  brands: done
+  common-modules: done
+  config-flow-test-coverage: todo
+  dependency-transparency: done
+  docs-installation-instructions: done
+  docs-removal-instructions: done
+  entity-event-setup: done
+  entity-unique-id: done
+  has-entity-name: done
+  runtime-data: done
+  test-before-configure: done
+  test-before-setup: done
+  unique-config-entry: done
+  config-entry-unloading: done
+  docs-configuration-parameters: done
+  docs-installation-parameters: done
+  entity-unavailable: done
+  integration-owner: done
+  log-when-unavailable: done
+  parallel-updates: done
+  test-coverage:
+    status: todo
+    comment: Tests cover parsing and climate entity but not full async config flow.
+  devices: done
+  diagnostics: done
+  discovery-update-info: done
+  discovery:
+    status: done
+    comment: mDNS/zeroconf discovery via _cli8k._tcp.local with CLI-W2* model filter.
+  docs-data-update: done
+  docs-examples: done
+  docs-known-limitations: done
+  docs-supported-devices: done
+  docs-supported-functions: done
+  docs-troubleshooting: done
+  docs-use-cases: done
+  entity-translations: done
+  exception-translations: done
+  reconfiguration-flow: done
+  strict-typing: done
+  async-dependency: done
+  action-setup:
+    status: exempt
+    comment: Integration has no service actions.
+  appropriate-polling:
+    status: exempt
+    comment: local_push — uses persistent TCP stream, not polling.
+  docs-actions:
+    status: exempt
+    comment: No service actions.
+  docs-triggers:
+    status: exempt
+    comment: No triggers.
+  docs-conditions:
+    status: exempt
+    comment: No conditions.
+  action-exceptions:
+    status: exempt
+    comment: No service actions.
+  reauthentication-flow:
+    status: exempt
+    comment: Telemetry stream on port 2000 is unauthenticated.
+  dynamic-devices:
+    status: exempt
+    comment: Single device per config entry.
+  stale-devices:
+    status: exempt
+    comment: Single device, no dynamic device management.
+  entity-category:
+    status: exempt
+    comment: Climate entities are primary entities, no diagnostic entities.
+  entity-device-class:
+    status: exempt
+    comment: Climate platform does not use device_class.
+  entity-disabled-by-default:
+    status: exempt
+    comment: Climate entity is primary, not noisy.
+  icon-translations:
+    status: exempt
+    comment: Climate entity icon is determined by HA based on entity type.
+  inject-websession:
+    status: exempt
+    comment: Raw TCP (no HTTP), no websession needed.
+  repair-issues:
+    status: exempt
+    comment: Connection failures are handled via entity-unavailable and ConfigEntryNotReady.
+  data_description:
+    status: done
+    comment: Config flow fields include data_description with context.
+  docs-high-level-description:
+    status: done
+    comment: README includes high-level integration description.

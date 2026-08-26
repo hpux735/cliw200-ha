@@ -5,19 +5,34 @@
         "data": {
           "host": "Host",
           "port": "Port"
+        },
+        "data_description": {
+          "host": "IP address or hostname of the thermostat controller",
+          "port": "TCP port for the telemetry stream (default: 2000)"
         }
       },
       "zeroconf_confirm": {
         "description": "Do you want to add the Savant {name} thermostat at {host}?"
+      },
+      "reconfigure": {
+        "data": {
+          "host": "Host",
+          "port": "Port"
+        },
+        "data_description": {
+          "host": "IP address or hostname of the thermostat controller",
+          "port": "TCP port for the telemetry stream (default: 2000)"
+        }
       }
     },
     "error": {
-      "cannot_connect": "Failed to connect"
+      "cannot_connect": "Failed to connect to the thermostat. Verify the host and port are correct and the device is reachable."
     },
     "abort": {
       "already_configured": "Device is already configured",
       "not_cli_device": "This device is not a CLI-W200/W220 thermostat",
-      "no_ipv4": "No reachable IPv4 address was found for this device"
+      "no_ipv4": "No reachable IPv4 address was found for this device",
+      "reconfigure_successful": "Reconfiguration successful"
     }
   },
   "entity": {
@@ -25,6 +40,11 @@
       "savant_cli": {
         "name": "Thermostat"
       }
+    }
+  },
+  "exceptions": {
+    "connection_failed": {
+      "message": "Failed to connect to the thermostat at {host}:{port}"
     }
   }
 }

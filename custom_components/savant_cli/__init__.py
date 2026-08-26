@@ -7,6 +7,7 @@ import logging
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_HOST, CONF_PORT, Platform
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import ConfigEntryNotReady
 
 from .const import DOMAIN
 from .coordinator import SavantCLICoordinator
@@ -23,6 +24,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     coordinator = SavantCLICoordinator(hass, host, port)
     await coordinator._async_setup()
+
+    if not coordinator._data.available:
+        raise ConfigEntryNotReady(
+            translation_domain=DOMAIN,
+            translation_key="connection_failed",
+            translation_placeholders={"host": host, "port": str(port)},
+        )
 
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = coordinator
 

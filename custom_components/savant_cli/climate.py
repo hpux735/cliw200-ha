@@ -43,6 +43,7 @@ class SavantCLIClimate(ClimateEntity):
 
     _attr_has_entity_name = True
     _attr_name = None
+    _attr_parallel_updates = 0
     _attr_temperature_unit = UnitOfTemperature.FAHRENHEIT
     _attr_hvac_modes = [HVACMode.HEAT_COOL, HVACMode.HEAT, HVACMode.COOL, HVACMode.OFF]
     _attr_fan_modes = list(FAN_MODES.values())
