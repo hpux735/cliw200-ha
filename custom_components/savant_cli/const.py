@@ -19,8 +19,8 @@ HVAC_ACTIONS = {
 }
 
 FAN_MODES = {
-    0: "auto",
-    1: "on",
+    0: "on",
+    1: "auto",
 }
 
 FAN_MODE_REVERSE = {v: k for k, v in FAN_MODES.items()}
