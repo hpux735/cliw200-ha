@@ -5,20 +5,20 @@ from __future__ import annotations
 import asyncio
 import ipaddress
 import logging
-from typing import Any
+from typing import Any, TYPE_CHECKING
 
 import voluptuous as vol
 
-try:
-    from homeassistant.helpers.service_info.zeroconf import ZeroconfServiceInfo
-except ImportError:
-    from homeassistant.components.zeroconf import (  # type: ignore[no-redef]
-        ZeroconfServiceInfo,
-    )
 from homeassistant.config_entries import ConfigEntry, ConfigFlow, ConfigFlowResult
 from homeassistant.const import CONF_HOST, CONF_PORT
-from homeassistant.data_entry_flow import FlowResultType
-from homeassistant.helpers import config_validation as cv
+
+if TYPE_CHECKING:
+    try:
+        from homeassistant.helpers.service_info.zeroconf import ZeroconfServiceInfo
+    except ImportError:
+        from homeassistant.components.zeroconf import (  # type: ignore[no-redef]
+            ZeroconfServiceInfo,
+        )
 
 from .const import DEFAULT_PORT, DOMAIN, TIMEOUT
 
