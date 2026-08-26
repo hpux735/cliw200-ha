@@ -194,3 +194,43 @@ class TestSavantCLIClimate:
     def test_device_info(self) -> None:
         info = self._climate().device_info
         assert info["manufacturer"] == "Racepoint Energy (Savant)"
+
+    def test_dual_setpoint_target_temperature_returns_none(self) -> None:
+        self.data.temp_low = 68.0
+        self.data.temp_high = 73.0
+        assert self._climate().target_temperature is None
+
+    def test_dual_setpoint_low_high(self) -> None:
+        self.data.temp_low = 68.0
+        self.data.temp_high = 73.0
+        climate = self._climate()
+        assert climate.target_temperature_low == 68.0
+        assert climate.target_temperature_high == 73.0
+
+    def test_dual_setpoint_features(self) -> None:
+        self.data.temp_low = 68.0
+        self.data.temp_high = 73.0
+        features = self._climate().supported_features
+        assert features & 16 == 16  # TARGET_TEMPERATURE_RANGE
+
+    def test_single_setpoint_features(self) -> None:
+        self.data.temp_sp = 75.0
+        features = self._climate().supported_features
+        assert features & 1 == 1  # TARGET_TEMPERATURE
+
+    def test_set_dual_temperature(self) -> None:
+        self.data.temp_low = 68.0
+        self.data.temp_high = 73.0
+
+        async def go():
+            await self._climate().async_set_temperature(
+                target_temp_low=66.0, target_temp_high=74.0
+            )
+        asyncio.run(go())
+        assert self.coordinator.send_command.call_count == 2
+        self.coordinator.send_command.assert_any_call(
+            "TSTAT_00 SET_TEMP_LOW=0660"
+        )
+        self.coordinator.send_command.assert_any_call(
+            "TSTAT_00 SET_TEMP_HIGH=0740"
+        )

@@ -35,6 +35,10 @@ def parse_line(data: SavantCLIData, line: bytes) -> None:
                     data.temp = _tenths(value)
                 elif key == "TEMP_SP":
                     data.temp_sp = _tenths(value)
+                elif key == "TEMP_LOW":
+                    data.temp_low = _tenths(value)
+                elif key == "TEMP_HIGH":
+                    data.temp_high = _tenths(value)
                 elif key == "HUMIDITY":
                     data.humidity = _tenths(value)
                 elif key == "HUMIDITY_SP":
@@ -163,6 +167,20 @@ class TestTelemetryParsing:
         assert HVAC_ACTIONS["00"] == "idle"
         assert HVAC_ACTIONS["01"] == "heating"
         assert HVAC_ACTIONS["02"] == "cooling"
+
+    def test_dual_setpoint_parse(self, fresh_data: SavantCLIData) -> None:
+        """Test parsing dual-setpoint TSTAT records."""
+        parse_line(fresh_data, b"TSTAT_00 SET_TEMP_LOW=0680")
+        parse_line(fresh_data, b"TSTAT_00 SET_TEMP_HIGH=0730")
+        assert fresh_data.temp_low == 68.0
+        assert fresh_data.temp_high == 73.0
+        assert fresh_data.is_dual_setpoint is True
+
+    def test_single_setpoint_is_not_dual(self, fresh_data: SavantCLIData) -> None:
+        """Test that single-setpoint is not reported as dual."""
+        parse_line(fresh_data, b"TSTAT_00 SET_TEMP_SP=0750")
+        assert fresh_data.temp_sp == 75.0
+        assert fresh_data.is_dual_setpoint is False
 
     def test_fan_mode_mapping(self) -> None:
         """Test that fan mode integers map correctly."""

@@ -19,6 +19,8 @@ class SavantCLIData:
     def __init__(self) -> None:
         self.temp: float | None = None
         self.temp_sp: float | None = None
+        self.temp_low: float | None = None
+        self.temp_high: float | None = None
         self.humidity: float | None = None
         self.humidity_sp: float | None = None
         self.hvac_mode: str = "01"
@@ -31,6 +33,11 @@ class SavantCLIData:
         self.relays: dict[str, bool] = {}
         self.btle_sensors: dict[str, dict[str, Any]] = {}
         self.available: bool = True
+
+    @property
+    def is_dual_setpoint(self) -> bool:
+        """Return True if this thermostat uses dual (heat/cool) setpoints."""
+        return self.temp_low is not None or self.temp_high is not None
 
 
 class SavantCLICoordinator(DataUpdateCoordinator[SavantCLIData]):
@@ -165,6 +172,10 @@ class SavantCLICoordinator(DataUpdateCoordinator[SavantCLIData]):
             self._data.temp = self._parse_tenths(value)
         elif key == "TEMP_SP":
             self._data.temp_sp = self._parse_tenths(value)
+        elif key == "TEMP_LOW":
+            self._data.temp_low = self._parse_tenths(value)
+        elif key == "TEMP_HIGH":
+            self._data.temp_high = self._parse_tenths(value)
         elif key == "HUMIDITY":
             self._data.humidity = self._parse_tenths(value)
         elif key == "HUMIDITY_SP":

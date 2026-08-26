@@ -46,12 +46,6 @@ class SavantCLIClimate(ClimateEntity):
     _attr_temperature_unit = UnitOfTemperature.FAHRENHEIT
     _attr_hvac_modes = [HVACMode.HEAT_COOL, HVACMode.HEAT, HVACMode.COOL, HVACMode.OFF]
     _attr_fan_modes = list(FAN_MODES.values())
-    _attr_supported_features = (
-        ClimateEntityFeature.TARGET_TEMPERATURE
-        | ClimateEntityFeature.FAN_MODE
-        | ClimateEntityFeature.TURN_OFF
-        | ClimateEntityFeature.TURN_ON
-    )
     _attr_target_temperature_step = 0.5
     _attr_min_temp = 40
     _attr_max_temp = 95
@@ -73,6 +67,20 @@ class SavantCLIClimate(ClimateEntity):
         return self.coordinator._data
 
     @property
+    def supported_features(self) -> ClimateEntityFeature:
+        """Return supported features."""
+        features = (
+            ClimateEntityFeature.FAN_MODE
+            | ClimateEntityFeature.TURN_OFF
+            | ClimateEntityFeature.TURN_ON
+        )
+        if self.data.is_dual_setpoint:
+            features |= ClimateEntityFeature.TARGET_TEMPERATURE_RANGE
+        else:
+            features |= ClimateEntityFeature.TARGET_TEMPERATURE
+        return features
+
+    @property
     def available(self) -> bool:
         """Return True if the entity is available."""
         return self.data.available
@@ -84,8 +92,24 @@ class SavantCLIClimate(ClimateEntity):
 
     @property
     def target_temperature(self) -> float | None:
-        """Return the target temperature."""
+        """Return the target temperature (single-setpoint only)."""
+        if self.data.is_dual_setpoint:
+            return None
         return self.data.temp_sp
+
+    @property
+    def target_temperature_low(self) -> float | None:
+        """Return the low target temperature (dual-setpoint, heat)."""
+        if self.data.is_dual_setpoint:
+            return self.data.temp_low
+        return None
+
+    @property
+    def target_temperature_high(self) -> float | None:
+        """Return the high target temperature (dual-setpoint, cool)."""
+        if self.data.is_dual_setpoint:
+            return self.data.temp_high
+        return None
 
     @property
     def current_humidity(self) -> float | None:
@@ -121,12 +145,22 @@ class SavantCLIClimate(ClimateEntity):
         )
 
     async def async_set_temperature(self, **kwargs: Any) -> None:
-        """Set a new target temperature."""
-        if ATTR_TEMPERATURE not in kwargs:
-            return
-        temp = kwargs[ATTR_TEMPERATURE]
-        tenths = int(round(temp * 10))
-        await self.coordinator.send_command(f"TSTAT_00 SET_TEMP_SP={tenths:04d}")
+        """Set new target temperature(s)."""
+        if self.data.is_dual_setpoint:
+            low = kwargs.get("target_temp_low")
+            high = kwargs.get("target_temp_high")
+            if low is not None:
+                tenths = int(round(low * 10))
+                await self.coordinator.send_command(f"TSTAT_00 SET_TEMP_LOW={tenths:04d}")
+            if high is not None:
+                tenths = int(round(high * 10))
+                await self.coordinator.send_command(f"TSTAT_00 SET_TEMP_HIGH={tenths:04d}")
+        else:
+            if ATTR_TEMPERATURE not in kwargs:
+                return
+            temp = kwargs[ATTR_TEMPERATURE]
+            tenths = int(round(temp * 10))
+            await self.coordinator.send_command(f"TSTAT_00 SET_TEMP_SP={tenths:04d}")
 
     async def async_set_hvac_mode(self, hvac_mode: HVACMode) -> None:
         """Set a new HVAC mode."""
