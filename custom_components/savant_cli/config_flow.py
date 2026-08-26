@@ -9,7 +9,12 @@ from typing import Any
 
 import voluptuous as vol
 
-from homeassistant.components.zeroconf import ZeroconfServiceInfo
+try:
+    from homeassistant.helpers.service_info.zeroconf import ZeroconfServiceInfo
+except ImportError:
+    from homeassistant.components.zeroconf import (  # type: ignore[no-redef]
+        ZeroconfServiceInfo,
+    )
 from homeassistant.config_entries import ConfigEntry, ConfigFlow, ConfigFlowResult
 from homeassistant.const import CONF_HOST, CONF_PORT
 from homeassistant.data_entry_flow import FlowResultType
