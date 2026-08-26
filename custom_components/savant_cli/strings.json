@@ -1,0 +1,30 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "data": {
+          "host": "[%key:common::config_flow::data::host%]",
+          "port": "[%key:common::config_flow::data::port%]"
+        }
+      },
+      "zeroconf_confirm": {
+        "description": "Do you want to add the Savant {name} thermostat at {host}?"
+      }
+    },
+    "error": {
+      "cannot_connect": "[%key:common::config_flow::error::cannot_connect%]"
+    },
+    "abort": {
+      "already_configured": "[%key:common::config_flow::abort::already_configured_device%]",
+      "not_cli_device": "This device is not a CLI-W200/W220 thermostat",
+      "no_ipv4": "No reachable IPv4 address was found for this device"
+    }
+  },
+  "entity": {
+    "climate": {
+      "savant_cli": {
+        "name": "Thermostat"
+      }
+    }
+  }
+}
