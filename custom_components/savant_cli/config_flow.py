@@ -31,12 +31,6 @@ _STEP_USER_SCHEMA = vol.Schema(
     }
 )
 
-_STEP_USER_DATA_DESCRIPTION = {
-    CONF_HOST: "Host",
-    CONF_PORT: "Port",
-}
-
-
 def _is_cli_model(txt: dict) -> bool:
     """Return True if the mDNS TXT record indicates a CLI-W200/W220 thermostat."""
     model = txt.get("mn", "")
@@ -133,7 +127,6 @@ class SavantCLIConfigFlow(ConfigFlow, domain=DOMAIN):
         return self.async_show_form(
             step_id="user",
             data_schema=_STEP_USER_SCHEMA,
-            data_description=_STEP_USER_DATA_DESCRIPTION,
             errors=errors,
         )
 
@@ -228,6 +221,5 @@ class SavantCLIConfigFlow(ConfigFlow, domain=DOMAIN):
                     CONF_PORT: reconfigure_entry.data.get(CONF_PORT, DEFAULT_PORT),
                 },
             ),
-            data_description=_STEP_USER_DATA_DESCRIPTION,
             errors=errors,
         )
