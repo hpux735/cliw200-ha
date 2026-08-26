@@ -168,3 +168,4 @@ class TestTelemetryParsing:
         """Test that fan mode integers map correctly."""
         assert FAN_MODES[0] == "on"
         assert FAN_MODES[1] == "auto"
+        assert FAN_MODES[2] == "cycle"

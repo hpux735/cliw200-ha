@@ -105,6 +105,10 @@ class TestSavantCLIClimate:
         self.data.fan_mode = 1
         assert self._climate().fan_mode == "auto"
 
+    def test_fan_mode_cycle(self) -> None:
+        self.data.fan_mode = 2
+        assert self._climate().fan_mode == "cycle"
+
     def test_available(self) -> None:
         assert self._climate().available is True
 
@@ -174,6 +178,14 @@ class TestSavantCLIClimate:
         asyncio.run(go())
         self.coordinator.send_command.assert_called_once_with(
             "TSTAT_00 SET_FAN_MODE=00"
+        )
+
+    def test_set_fan_mode_cycle(self) -> None:
+        async def go():
+            await self._climate().async_set_fan_mode("cycle")
+        asyncio.run(go())
+        self.coordinator.send_command.assert_called_once_with(
+            "TSTAT_00 SET_FAN_MODE=02"
         )
 
     def test_unique_id(self) -> None:
