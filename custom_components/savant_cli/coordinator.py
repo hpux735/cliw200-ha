@@ -51,8 +51,17 @@ class SavantCLIData:
 
     @property
     def _has_effective_range(self) -> bool:
-        """Return True if a single-setpoint with tolerance gives an effective range."""
-        return self.temp_sp is not None and self.temp_tolerance is not None
+        """Return True if in auto-changeover mode with a tolerance deadband.
+
+        Tolerance only creates a dual-setpoint range in Auto (heat_cool) mode.
+        In heat-only or cool-only mode, the thermostat triggers at the setpoint
+        itself, not at setpoint ± tolerance.
+        """
+        return (
+            self.hvac_mode == "03"
+            and self.temp_sp is not None
+            and self.temp_tolerance is not None
+        )
 
     def _compute_effective_range(self) -> None:
         """Derive temp_low/temp_high from temp_sp and temp_tolerance if not native."""

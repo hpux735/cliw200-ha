@@ -238,6 +238,7 @@ class TestSavantCLIClimate:
         )
 
     def test_set_dual_temperature_computed(self) -> None:
+        self.data.hvac_mode = "03"
         self.data.temp_sp = 77.0
         self.data.temp_tolerance = 2.0
         self.data.temp_low = 75.0

@@ -193,7 +193,8 @@ class TestTelemetryParsing:
         assert fresh_data.is_dual_setpoint is False
 
     def test_computed_dual_from_tolerance(self, fresh_data: SavantCLIData) -> None:
-        """Test that temp_sp + temp_tolerance computes temp_low/temp_high."""
+        """Test that temp_sp + temp_tolerance computes temp_low/temp_high in auto mode."""
+        parse_line(fresh_data, b"TSTAT_00 SET_HVAC_MODE=03")
         parse_line(fresh_data, b"TSTAT_00 SET_TEMP_SP=0770")
         parse_line(fresh_data, b"TSTAT_00 SET_TEMP_TOLERANCE=0020")
         assert fresh_data.temp_sp == 77.0
@@ -202,6 +203,22 @@ class TestTelemetryParsing:
         assert fresh_data.temp_high == 79.0
         assert fresh_data.is_dual_setpoint is True
         assert fresh_data.uses_native_dual is False
+
+    def test_tolerance_ignored_in_cool_mode(self, fresh_data: SavantCLIData) -> None:
+        """Test that tolerance does not create dual-setpoint in cool-only mode."""
+        parse_line(fresh_data, b"TSTAT_00 SET_HVAC_MODE=02")
+        parse_line(fresh_data, b"TSTAT_00 SET_TEMP_SP=0770")
+        parse_line(fresh_data, b"TSTAT_00 SET_TEMP_TOLERANCE=0050")
+        assert fresh_data.temp_sp == 77.0
+        assert fresh_data.temp_tolerance == 5.0
+        assert fresh_data.is_dual_setpoint is False
+
+    def test_tolerance_ignored_in_heat_mode(self, fresh_data: SavantCLIData) -> None:
+        """Test that tolerance does not create dual-setpoint in heat-only mode."""
+        parse_line(fresh_data, b"TSTAT_00 SET_HVAC_MODE=01")
+        parse_line(fresh_data, b"TSTAT_00 SET_TEMP_SP=0770")
+        parse_line(fresh_data, b"TSTAT_00 SET_TEMP_TOLERANCE=0050")
+        assert fresh_data.is_dual_setpoint is False
 
     def test_fan_mode_mapping(self) -> None:
         """Test that fan mode integers map correctly."""
