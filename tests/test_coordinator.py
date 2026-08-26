@@ -31,14 +31,18 @@ def parse_line(data: SavantCLIData, line: bytes) -> None:
             key = m.group(1)
             value = m.group(2)
             if device.startswith("TSTAT_"):
+                recompute = False
                 if key == "TEMP":
                     data.temp = _tenths(value)
                 elif key == "TEMP_SP":
                     data.temp_sp = _tenths(value)
+                    recompute = True
                 elif key == "TEMP_LOW":
-                    data.temp_low = _tenths(value)
+                    data._native_temp_low = _tenths(value)
+                    recompute = True
                 elif key == "TEMP_HIGH":
-                    data.temp_high = _tenths(value)
+                    data._native_temp_high = _tenths(value)
+                    recompute = True
                 elif key == "HUMIDITY":
                     data.humidity = _tenths(value)
                 elif key == "HUMIDITY_SP":
@@ -55,6 +59,9 @@ def parse_line(data: SavantCLIData, line: bytes) -> None:
                     data.name = value
                 elif key == "TEMP_TOLERANCE":
                     data.temp_tolerance = _tenths(value)
+                    recompute = True
+                if recompute:
+                    data._compute_effective_range()
                 return
             if device.startswith("@"):
                 mac = device[1:]
@@ -169,18 +176,32 @@ class TestTelemetryParsing:
         assert HVAC_ACTIONS["02"] == "cooling"
 
     def test_dual_setpoint_parse(self, fresh_data: SavantCLIData) -> None:
-        """Test parsing dual-setpoint TSTAT records."""
+        """Test parsing native dual-setpoint TSTAT records."""
         parse_line(fresh_data, b"TSTAT_00 SET_TEMP_LOW=0680")
         parse_line(fresh_data, b"TSTAT_00 SET_TEMP_HIGH=0730")
+        assert fresh_data._native_temp_low == 68.0
+        assert fresh_data._native_temp_high == 73.0
         assert fresh_data.temp_low == 68.0
         assert fresh_data.temp_high == 73.0
         assert fresh_data.is_dual_setpoint is True
+        assert fresh_data.uses_native_dual is True
 
     def test_single_setpoint_is_not_dual(self, fresh_data: SavantCLIData) -> None:
-        """Test that single-setpoint is not reported as dual."""
+        """Test that single-setpoint alone is not dual."""
         parse_line(fresh_data, b"TSTAT_00 SET_TEMP_SP=0750")
         assert fresh_data.temp_sp == 75.0
         assert fresh_data.is_dual_setpoint is False
+
+    def test_computed_dual_from_tolerance(self, fresh_data: SavantCLIData) -> None:
+        """Test that temp_sp + temp_tolerance computes temp_low/temp_high."""
+        parse_line(fresh_data, b"TSTAT_00 SET_TEMP_SP=0770")
+        parse_line(fresh_data, b"TSTAT_00 SET_TEMP_TOLERANCE=0020")
+        assert fresh_data.temp_sp == 77.0
+        assert fresh_data.temp_tolerance == 2.0
+        assert fresh_data.temp_low == 75.0
+        assert fresh_data.temp_high == 79.0
+        assert fresh_data.is_dual_setpoint is True
+        assert fresh_data.uses_native_dual is False
 
     def test_fan_mode_mapping(self) -> None:
         """Test that fan mode integers map correctly."""

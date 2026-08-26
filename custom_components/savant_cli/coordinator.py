@@ -33,11 +33,35 @@ class SavantCLIData:
         self.relays: dict[str, bool] = {}
         self.btle_sensors: dict[str, dict[str, Any]] = {}
         self.available: bool = True
+        self._native_temp_low: float | None = None
+        self._native_temp_high: float | None = None
 
     @property
     def is_dual_setpoint(self) -> bool:
         """Return True if this thermostat uses dual (heat/cool) setpoints."""
-        return self.temp_low is not None or self.temp_high is not None
+        return (
+            self.temp_low is not None
+            or self.temp_high is not None
+        )
+
+    @property
+    def uses_native_dual(self) -> bool:
+        """Return True if the device natively reports TEMP_LOW/TEMP_HIGH."""
+        return self._native_temp_low is not None or self._native_temp_high is not None
+
+    @property
+    def _has_effective_range(self) -> bool:
+        """Return True if a single-setpoint with tolerance gives an effective range."""
+        return self.temp_sp is not None and self.temp_tolerance is not None
+
+    def _compute_effective_range(self) -> None:
+        """Derive temp_low/temp_high from temp_sp and temp_tolerance if not native."""
+        if self.uses_native_dual:
+            self.temp_low = self._native_temp_low
+            self.temp_high = self._native_temp_high
+        elif self._has_effective_range:
+            self.temp_low = round(self.temp_sp - self.temp_tolerance, 1)
+            self.temp_high = round(self.temp_sp + self.temp_tolerance, 1)
 
 
 class SavantCLICoordinator(DataUpdateCoordinator[SavantCLIData]):
@@ -168,14 +192,18 @@ class SavantCLICoordinator(DataUpdateCoordinator[SavantCLIData]):
 
     def _parse_tstat(self, device: str, key: str, value: str) -> None:
         """Parse a TSTAT record."""
+        recompute = False
         if key == "TEMP":
             self._data.temp = self._parse_tenths(value)
         elif key == "TEMP_SP":
             self._data.temp_sp = self._parse_tenths(value)
+            recompute = True
         elif key == "TEMP_LOW":
-            self._data.temp_low = self._parse_tenths(value)
+            self._data._native_temp_low = self._parse_tenths(value)
+            recompute = True
         elif key == "TEMP_HIGH":
-            self._data.temp_high = self._parse_tenths(value)
+            self._data._native_temp_high = self._parse_tenths(value)
+            recompute = True
         elif key == "HUMIDITY":
             self._data.humidity = self._parse_tenths(value)
         elif key == "HUMIDITY_SP":
@@ -192,6 +220,9 @@ class SavantCLICoordinator(DataUpdateCoordinator[SavantCLIData]):
             self._data.name = value
         elif key == "TEMP_TOLERANCE":
             self._data.temp_tolerance = self._parse_tenths(value)
+            recompute = True
+        if recompute:
+            self._data._compute_effective_range()
         self.async_set_updated_data(self._data)
 
     def _parse_btle(self, mac: str, key: str, value: str) -> None:

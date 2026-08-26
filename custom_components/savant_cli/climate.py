@@ -146,7 +146,7 @@ class SavantCLIClimate(ClimateEntity):
 
     async def async_set_temperature(self, **kwargs: Any) -> None:
         """Set new target temperature(s)."""
-        if self.data.is_dual_setpoint:
+        if self.data.is_dual_setpoint and self.data.uses_native_dual:
             low = kwargs.get("target_temp_low")
             high = kwargs.get("target_temp_high")
             if low is not None:
@@ -155,6 +155,28 @@ class SavantCLIClimate(ClimateEntity):
             if high is not None:
                 tenths = int(round(high * 10))
                 await self.coordinator.send_command(f"TSTAT_00 SET_TEMP_HIGH={tenths:04d}")
+        elif self.data.is_dual_setpoint:
+            low = kwargs.get("target_temp_low")
+            high = kwargs.get("target_temp_high")
+            if low is not None and high is not None:
+                center = round((low + high) / 2, 1)
+                tolerance = round((high - low) / 2, 1)
+                await self.coordinator.send_command(
+                    f"TSTAT_00 SET_TEMP_SP={int(round(center * 10)):04d}"
+                )
+                await self.coordinator.send_command(
+                    f"TSTAT_00 SET_TEMP_TOLERANCE={int(round(tolerance * 10)):04d}"
+                )
+            elif low is not None and self.data.temp_tolerance is not None:
+                center = round(low + self.data.temp_tolerance, 1)
+                await self.coordinator.send_command(
+                    f"TSTAT_00 SET_TEMP_SP={int(round(center * 10)):04d}"
+                )
+            elif high is not None and self.data.temp_tolerance is not None:
+                center = round(high - self.data.temp_tolerance, 1)
+                await self.coordinator.send_command(
+                    f"TSTAT_00 SET_TEMP_SP={int(round(center * 10)):04d}"
+                )
         else:
             if ATTR_TEMPERATURE not in kwargs:
                 return

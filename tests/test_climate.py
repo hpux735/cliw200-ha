@@ -218,9 +218,11 @@ class TestSavantCLIClimate:
         features = self._climate().supported_features
         assert features & 1 == 1  # TARGET_TEMPERATURE
 
-    def test_set_dual_temperature(self) -> None:
-        self.data.temp_low = 68.0
-        self.data.temp_high = 73.0
+    def test_set_dual_temperature_native(self) -> None:
+        self.data._native_temp_low = 70.0
+        self.data._native_temp_high = 76.0
+        self.data.temp_low = 70.0
+        self.data.temp_high = 76.0
 
         async def go():
             await self._climate().async_set_temperature(
@@ -233,4 +235,21 @@ class TestSavantCLIClimate:
         )
         self.coordinator.send_command.assert_any_call(
             "TSTAT_00 SET_TEMP_HIGH=0740"
+        )
+
+    def test_set_dual_temperature_computed(self) -> None:
+        self.data.temp_sp = 77.0
+        self.data.temp_tolerance = 2.0
+        self.data.temp_low = 75.0
+        self.data.temp_high = 79.0
+
+        async def go():
+            await self._climate().async_set_temperature(
+                target_temp_low=74.0, target_temp_high=80.0
+            )
+        asyncio.run(go())
+        assert self.coordinator.send_command.call_count == 2
+        self.coordinator.send_command.assert_any_call("TSTAT_00 SET_TEMP_SP=0770")
+        self.coordinator.send_command.assert_any_call(
+            "TSTAT_00 SET_TEMP_TOLERANCE=0030"
         )
