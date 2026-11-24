@@ -4,6 +4,7 @@ import asyncio
 from unittest.mock import AsyncMock, MagicMock, PropertyMock
 
 import pytest
+from homeassistant.components.climate import ClimateEntityFeature
 
 from custom_components.savant_cli.climate import SavantCLIClimate
 from custom_components.savant_cli.coordinator import SavantCLIData
@@ -211,12 +212,12 @@ class TestSavantCLIClimate:
         self.data.temp_low = 68.0
         self.data.temp_high = 73.0
         features = self._climate().supported_features
-        assert features & 16 == 16  # TARGET_TEMPERATURE_RANGE
+        assert features & ClimateEntityFeature.TARGET_TEMPERATURE_RANGE
 
     def test_single_setpoint_features(self) -> None:
         self.data.temp_sp = 75.0
         features = self._climate().supported_features
-        assert features & 1 == 1  # TARGET_TEMPERATURE
+        assert features & ClimateEntityFeature.TARGET_TEMPERATURE
 
     def test_set_dual_temperature_native(self) -> None:
         self.data._native_temp_low = 70.0

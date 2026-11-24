@@ -19,6 +19,8 @@ the unauthenticated TCP telemetry stream (port 2000).
 - Fan modes: On, Auto, Cycle
 - Current HVAC action: idle, heating, cooling
 - Automatic mDNS/zeroconf discovery
+- Separate climate entities for each controller zone, with reported zone names
+- Per-zone Home Assistant name and area selection during setup
 - Live push updates via persistent TCP stream (local push)
 
 ## Supported devices
@@ -33,7 +35,7 @@ dual-setpoint (separate heat/cool thresholds) configurations are supported.
 
 | Entity | Type | Description |
 |--------|------|-------------|
-| Thermostat | `climate` | Temperature, setpoint(s), humidity, HVAC mode, fan mode |
+| Each discovered zone | `climate` | Independent temperature, setpoint(s), humidity, HVAC mode, fan mode |
 
 The climate entity supports `target_temperature` for single-setpoint thermostats
 and `target_temperature_low`/`target_temperature_high` for dual-setpoint and
@@ -48,6 +50,32 @@ comfort-band configurations.
 3. Restart Home Assistant
 4. The thermostat should be auto-discovered via mDNS, or add manually by
    entering the IP address
+5. Setup listens passively and shows the first named zone as soon as it arrives,
+   rather than waiting for the whole discovery window. No commands or settings
+   are sent to the thermostat.
+6. Confirm each zone's prefilled name and optionally select an existing Home
+   Assistant area. Discovery continues while you review the forms. Create any
+   missing areas in Home Assistant first.
+7. Check **Finish now** on a zone form to save and finish early, or continue
+   through the zones found so far. When none remain to review, you can finish
+   from the summary or uncheck **Finish now** to wait for another zone. The
+   setup discovery window is limited to 40 seconds in total.
+
+Zone names currently come from the controller's `SET_NAME` telemetry, not its
+password-protected configuration file. You can edit the suggested name before
+finishing setup. Area selections affect only Home Assistant, not the controller.
+Finishing early saves the named zones found so far, even if you have not reviewed
+all their forms; unreviewed new zones keep their reported names without an
+explicit area. Zones appearing after setup are added automatically by the
+runtime connection. Use **Reconfigure** to review their names and areas later.
+Initial setup still needs at least one zone to report; it cannot force an
+immediate snapshot without a verified getter.
+
+For an existing installation, use **Reconfigure** on the integration entry to
+discover zones and choose their names and areas. Explicit reconfiguration
+updates the corresponding existing entities; ordinary reloads preserve later
+name and area changes made in Home Assistant. The original zone-zero entity
+keeps its existing unique ID so its automations continue to reference it.
 
 ### Manual
 
@@ -69,6 +97,8 @@ To fully remove the integration, delete the `savant_cli` directory from
 |-----------|-------------|---------|
 | Host | IP address or hostname of the thermostat controller | (required) |
 | Port | TCP port for the telemetry stream | 2000 |
+| Zone name | Entity name, prefilled from the controller's zone telemetry | Reported name, or zone ID |
+| Zone area | Existing Home Assistant area for that zone's climate entity | Optional; inherits controller area if omitted |
 
 These can be changed via the Reconfigure option on the integration entry.
 
@@ -106,7 +136,8 @@ documentation and the discovery process.
 - **HVAC control:** Adjust setpoints, switch between heat/cool/auto/off modes
 - **Fan scheduling:** Control fan mode (on, auto, cycle) via automations
 - **Multi-zone monitoring:** Both single-setpoint (comfort band) and multi-zone
-  (dual-setpoint) thermostat configurations are supported
+  thermostat configurations have a separate climate entity per reported zone.
+  Multiple zones and dual setpoints are independent capabilities.
 
 ## Automation examples
 
@@ -191,10 +222,26 @@ temporarily unreachable and will be retried.
 - The thermostat controller's HTTP API (`/thermostat`, `/auth`) is
   password-protected and not used by this integration. All data comes from
   the unauthenticated TCP telemetry stream on port 2000.
-- Only one thermostat zone (TSTAT_00) is supported per controller.
-  Multi-zone controllers will only expose the primary zone.
+- Zones share one controller device in Home Assistant. Areas are assigned to
+  the individual climate entities rather than to separate zone devices.
+- Setup listens for up to 40 seconds because no end-of-snapshot marker is known,
+  but lets you finish as soon as a named zone has arrived. This does not prove
+  that every zone has been found. Zones reported later are added automatically;
+  use Reconfigure to review their names and areas. A zone that is not reported
+  cannot be discovered. Zones without names appear with zone-ID defaults when
+  the setup discovery window ends.
+- HTTP configuration retrieval requires a Bearer token. This integration does
+  not yet authenticate to or decode the controller configuration file; verified
+  telemetry is used for zone discovery instead.
 - IPv6 is not supported for telemetry. The device's IPv4 address must be
   used.
 - Firmware updates are not supported through this integration.
 - The integration has been tested with firmware version 4.0.7. Other
   versions may have different telemetry formats.
+
+## Development tests
+
+Use a Python 3.12 virtual environment with `requirements_test.txt`, then run
+`python -m pytest`. The tests use real Home Assistant 2024.12.5 libraries and
+mock thermostat connections. They do not connect to or send commands to any
+thermostat. Live discovery was separately checked using passive TCP reads.

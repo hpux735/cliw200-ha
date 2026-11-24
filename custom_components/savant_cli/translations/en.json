@@ -14,6 +14,28 @@
       "zeroconf_confirm": {
         "description": "Do you want to add the Savant {name} thermostat at {host}?"
       },
+      "discover": {
+        "title": "Discover Thermostat Zones"
+      },
+      "discovery_error": {
+        "description": "Check the controller connection, then submit to retry passive zone discovery."
+      },
+      "zone_area": {
+        "title": "Set Up Zone {zone_id}",
+        "description": "Choose a name and optionally select an existing Home Assistant area. Discovery continues while you review zones. Finish now to save all zones found so far; unreviewed zones keep their names without an area. Later zones are added automatically at runtime.",
+        "data": {
+          "name": "Zone name",
+          "area_id": "Area",
+          "finish_setup": "Finish now"
+        }
+      },
+      "discovery_review": {
+        "title": "Zones Found So Far",
+        "description": "Found: {zones}. Finish now, or uncheck the box to wait for another zone within the discovery window. Later zones are added automatically at runtime.",
+        "data": {
+          "finish_setup": "Finish now"
+        }
+      },
       "reconfigure": {
         "data": {
           "host": "Host",
@@ -25,8 +47,15 @@
         }
       }
     },
+    "progress": {
+      "discover_zones": "Waiting for the next thermostat zone, for up to 40 seconds total. You can review names and areas as zones arrive and finish early. No commands are sent."
+    },
     "error": {
-      "cannot_connect": "Failed to connect to the thermostat. Verify the host and port are correct and the device is reachable."
+      "cannot_connect": "Failed to connect to the thermostat. Verify the host and port are correct and the device is reachable.",
+      "no_zones": "No thermostat zones were received. Check the telemetry host and port and retry.",
+      "invalid_port": "Enter a port between 1 and 65535.",
+      "invalid_name": "Enter a non-empty zone name.",
+      "invalid_area": "This area no longer exists. Select an existing area or leave it unassigned."
     },
     "abort": {
       "already_configured": "Device is already configured",

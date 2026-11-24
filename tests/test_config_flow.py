@@ -1,18 +1,15 @@
 """Tests for the config flow."""
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from types import SimpleNamespace
+from unittest.mock import MagicMock
 
 import pytest
-
-from homeassistant import config_entries
-from homeassistant.const import CONF_HOST, CONF_PORT
 
 from custom_components.savant_cli.config_flow import (
     _is_cli_model,
     _is_ipv4,
     _discovery_host,
 )
-from custom_components.savant_cli.const import DEFAULT_PORT, DOMAIN
 
 
 class TestHelpers:
@@ -59,8 +56,11 @@ class TestHelpers:
 
     def test_discovery_host_ipv6_only(self) -> None:
         """Test that IPv6-only returns None."""
-        info = MagicMock()
-        info.ip_addresses = ["fd2d:c69e:d0eb:487e:9a84:e3ff:fe9b:2c5c"]
+        info = SimpleNamespace(
+            ip_addresses=["fd2d:c69e:d0eb:487e:9a84:e3ff:fe9b:2c5c"],
+            ip_address="fd2d:c69e:d0eb:487e:9a84:e3ff:fe9b:2c5c",
+            host="fd2d:c69e:d0eb:487e:9a84:e3ff:fe9b:2c5c",
+        )
         assert _discovery_host(info) is None
 
     def test_discovery_host_fallback_ip_address(self) -> None:
@@ -82,27 +82,12 @@ class TestHelpers:
 class TestConfigFlow:
     """Test the config flow."""
 
-    @patch("custom_components.savant_cli.config_flow.SavantCLIConfigFlow.async_set_unique_id")
-    async def _run_user_step(self, mock_unique_id, hass, host="192.168.3.45", port=DEFAULT_PORT):
-        """Helper to run the user step."""
-        flow = config_entries.ConfigFlow.__new__(config_entries.ConfigFlow)
-        flow.hass = hass
-        flow._async_current_entries = MagicMock(return_value=[])
-
-        # Manually construct our flow
-        from custom_components.savant_cli.config_flow import SavantCLIConfigFlow
-        result = SavantCLIConfigFlow.async_step_user.__func__(
-            flow, {CONF_HOST: host, CONF_PORT: port}
-        )
-        return result
-
-    def test_user_step_shows_form(self) -> None:
+    @pytest.mark.asyncio
+    async def test_user_step_shows_form(self) -> None:
         """Test that the user step shows the form when no input."""
-        from custom_components.savant_cli.config_flow import SavantCLIConfigFlow, _STEP_USER_SCHEMA
+        from custom_components.savant_cli.config_flow import SavantCLIConfigFlow
 
-        flow = MagicMock(spec=SavantCLIConfigFlow)
-        # Mock the config flow to return a form
-
-        result = SavantCLIConfigFlow.async_step_user.__func__(flow, None)
+        flow = SavantCLIConfigFlow()
+        result = await flow.async_step_user()
         assert result["type"] == "form"
         assert result["step_id"] == "user"

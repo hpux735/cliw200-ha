@@ -71,6 +71,9 @@ class SavantCLIData:
         elif self._has_effective_range:
             self.temp_low = round(self.temp_sp - self.temp_tolerance, 1)
             self.temp_high = round(self.temp_sp + self.temp_tolerance, 1)
+        else:
+            self.temp_low = None
+            self.temp_high = None
 
 
 class SavantCLICoordinator(DataUpdateCoordinator[SavantCLIData]):
@@ -86,6 +89,7 @@ class SavantCLICoordinator(DataUpdateCoordinator[SavantCLIData]):
         self.host = host
         self.port = port
         self._data = SavantCLIData()
+        self.zones: dict[str, SavantCLIData] = {}
         self._reader: asyncio.StreamReader | None = None
         self._writer: asyncio.StreamWriter | None = None
         self._reconnect_task: asyncio.Task | None = None
@@ -177,7 +181,7 @@ class SavantCLICoordinator(DataUpdateCoordinator[SavantCLIData]):
             device = parts[0].decode()
             payload = parts[1].decode()
 
-            m = re.match(r"SET_(\w+)=(\S+)", payload)
+            m = re.fullmatch(r"SET_(\w+)=(.+)", payload)
             if m:
                 key = m.group(1)
                 value = m.group(2)
@@ -201,37 +205,41 @@ class SavantCLICoordinator(DataUpdateCoordinator[SavantCLIData]):
 
     def _parse_tstat(self, device: str, key: str, value: str) -> None:
         """Parse a TSTAT record."""
+        if device not in self.zones:
+            self.zones[device] = self._data if device == "TSTAT_00" else SavantCLIData()
+        data = self.zones[device]
         recompute = False
         if key == "TEMP":
-            self._data.temp = self._parse_tenths(value)
+            data.temp = self._parse_tenths(value)
         elif key == "TEMP_SP":
-            self._data.temp_sp = self._parse_tenths(value)
+            data.temp_sp = self._parse_tenths(value)
             recompute = True
         elif key == "TEMP_LOW":
-            self._data._native_temp_low = self._parse_tenths(value)
+            data._native_temp_low = self._parse_tenths(value)
             recompute = True
         elif key == "TEMP_HIGH":
-            self._data._native_temp_high = self._parse_tenths(value)
+            data._native_temp_high = self._parse_tenths(value)
             recompute = True
         elif key == "HUMIDITY":
-            self._data.humidity = self._parse_tenths(value)
+            data.humidity = self._parse_tenths(value)
         elif key == "HUMIDITY_SP":
-            self._data.humidity_sp = self._parse_tenths(value)
+            data.humidity_sp = self._parse_tenths(value)
         elif key == "HVAC_MODE":
-            self._data.hvac_mode = value
+            data.hvac_mode = value
+            recompute = True
         elif key == "HVAC_STATE":
-            self._data.hvac_state = value
+            data.hvac_state = value
         elif key == "FAN_MODE":
-            self._data.fan_mode = int(value)
+            data.fan_mode = int(value)
         elif key == "FAN_STAGE":
-            self._data.fan_stage = int(value)
+            data.fan_stage = int(value)
         elif key == "NAME":
-            self._data.name = value
+            data.name = value
         elif key == "TEMP_TOLERANCE":
-            self._data.temp_tolerance = self._parse_tenths(value)
+            data.temp_tolerance = self._parse_tenths(value)
             recompute = True
         if recompute:
-            self._data._compute_effective_range()
+            data._compute_effective_range()
         self.async_set_updated_data(self._data)
 
     def _parse_btle(self, mac: str, key: str, value: str) -> None:

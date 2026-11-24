@@ -14,6 +14,8 @@ from homeassistant.components.climate import (
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import ATTR_TEMPERATURE, UnitOfTemperature
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import entity_registry as er
+from homeassistant.helpers import area_registry as ar
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import (
@@ -26,6 +28,7 @@ from .const import (
 from .coordinator import SavantCLICoordinator, SavantCLIData
 
 _LOGGER = logging.getLogger(__name__)
+PARALLEL_UPDATES = 0
 
 
 async def async_setup_entry(
@@ -35,15 +38,42 @@ async def async_setup_entry(
 ) -> None:
     """Set up Savant CLI climate entities from a config entry."""
     coordinator: SavantCLICoordinator = hass.data[DOMAIN][entry.entry_id]
-    async_add_entities([SavantCLIClimate(coordinator)])
+    configured = entry.data.get("zones", {})
+    for zone_id, config in configured.items():
+        if zone_id not in coordinator.zones:
+            coordinator.zones[zone_id] = (
+                coordinator._data if zone_id == "TSTAT_00" else SavantCLIData()
+            )
+        if config.get("name") and coordinator.zones[zone_id].name == "Thermostat":
+            coordinator.zones[zone_id].name = config["name"]
+
+    registry = er.async_get(hass)
+    added: set[str] = set()
+
+    def add_zones() -> None:
+        entities = []
+        for zone_id in coordinator.zones:
+            if zone_id in added:
+                continue
+            entity = SavantCLIClimate(coordinator, zone_id)
+            entity._configured_name = configured.get(zone_id, {}).get("name")
+            if registry.async_get_entity_id("climate", DOMAIN, entity.unique_id) is None:
+                entity._initial_area_id = configured.get(zone_id, {}).get("area_id")
+            added.add(zone_id)
+            entities.append(entity)
+        if entities:
+            async_add_entities(entities)
+
+    entry.async_on_unload(coordinator.async_add_listener(add_zones))
+    add_zones()
 
 
 class SavantCLIClimate(ClimateEntity):
     """Climate entity for the Savant CLI thermostat."""
 
-    _attr_has_entity_name = True
+    _attr_has_entity_name = False
     _attr_name = None
-    _attr_parallel_updates = 0
+    _attr_should_poll = False
     _attr_temperature_unit = UnitOfTemperature.FAHRENHEIT
     _attr_hvac_modes = [HVACMode.HEAT_COOL, HVACMode.HEAT, HVACMode.COOL, HVACMode.OFF]
     _attr_fan_modes = list(FAN_MODES.values())
@@ -51,10 +81,17 @@ class SavantCLIClimate(ClimateEntity):
     _attr_min_temp = 40
     _attr_max_temp = 95
 
-    def __init__(self, coordinator: SavantCLICoordinator) -> None:
+    def __init__(
+        self, coordinator: SavantCLICoordinator, zone: str = "TSTAT_00"
+    ) -> None:
         """Initialize the climate entity."""
         self.coordinator = coordinator
+        self.zone = zone
+        self._initial_area_id: str | None = None
+        self._configured_name: str | None = None
         self._attr_unique_id = f"cli_climate_{coordinator.host}"
+        if zone != "TSTAT_00":
+            self._attr_unique_id += f"_{zone}"
         self._attr_device_info = {
             "identifiers": {(DOMAIN, coordinator.host)},
             "name": "Savant CLI Thermostat",
@@ -65,7 +102,16 @@ class SavantCLIClimate(ClimateEntity):
     @property
     def data(self) -> SavantCLIData:
         """Return parsed thermostat data."""
-        return self.coordinator._data
+        if self.zone == "TSTAT_00":
+            return self.coordinator._data
+        return self.coordinator.zones[self.zone]
+
+    @property
+    def name(self) -> str:
+        """Use the zone name without a shared controller name prefix."""
+        return self._configured_name or (
+            self.data.name if self.data.name != "Thermostat" else self.zone
+        )
 
     @property
     def supported_features(self) -> ClimateEntityFeature:
@@ -84,7 +130,7 @@ class SavantCLIClimate(ClimateEntity):
     @property
     def available(self) -> bool:
         """Return True if the entity is available."""
-        return self.data.available
+        return self.coordinator._data.available
 
     @property
     def current_temperature(self) -> float | None:
@@ -141,6 +187,15 @@ class SavantCLIClimate(ClimateEntity):
 
     async def async_added_to_hass(self) -> None:
         """Register for coordinator updates."""
+        await super().async_added_to_hass()
+        if (
+            self._initial_area_id is not None
+            and ar.async_get(self.hass).async_get_area(self._initial_area_id) is not None
+        ):
+            er.async_get(self.hass).async_update_entity(
+                self.entity_id, area_id=self._initial_area_id
+            )
+            self._initial_area_id = None
         self.async_on_remove(
             self.coordinator.async_add_listener(self.async_write_ha_state)
         )
@@ -152,10 +207,10 @@ class SavantCLIClimate(ClimateEntity):
             high = kwargs.get("target_temp_high")
             if low is not None:
                 tenths = int(round(low * 10))
-                await self.coordinator.send_command(f"TSTAT_00 SET_TEMP_LOW={tenths:04d}")
+                await self.coordinator.send_command(f"{self.zone} SET_TEMP_LOW={tenths:04d}")
             if high is not None:
                 tenths = int(round(high * 10))
-                await self.coordinator.send_command(f"TSTAT_00 SET_TEMP_HIGH={tenths:04d}")
+                await self.coordinator.send_command(f"{self.zone} SET_TEMP_HIGH={tenths:04d}")
         elif self.data.is_dual_setpoint:
             low = kwargs.get("target_temp_low")
             high = kwargs.get("target_temp_high")
@@ -163,35 +218,35 @@ class SavantCLIClimate(ClimateEntity):
                 center = round((low + high) / 2, 1)
                 tolerance = round((high - low) / 2, 1)
                 await self.coordinator.send_command(
-                    f"TSTAT_00 SET_TEMP_SP={int(round(center * 10)):04d}"
+                    f"{self.zone} SET_TEMP_SP={int(round(center * 10)):04d}"
                 )
                 await self.coordinator.send_command(
-                    f"TSTAT_00 SET_TEMP_TOLERANCE={int(round(tolerance * 10)):04d}"
+                    f"{self.zone} SET_TEMP_TOLERANCE={int(round(tolerance * 10)):04d}"
                 )
             elif low is not None and self.data.temp_tolerance is not None:
                 center = round(low + self.data.temp_tolerance, 1)
                 await self.coordinator.send_command(
-                    f"TSTAT_00 SET_TEMP_SP={int(round(center * 10)):04d}"
+                    f"{self.zone} SET_TEMP_SP={int(round(center * 10)):04d}"
                 )
             elif high is not None and self.data.temp_tolerance is not None:
                 center = round(high - self.data.temp_tolerance, 1)
                 await self.coordinator.send_command(
-                    f"TSTAT_00 SET_TEMP_SP={int(round(center * 10)):04d}"
+                    f"{self.zone} SET_TEMP_SP={int(round(center * 10)):04d}"
                 )
         else:
             if ATTR_TEMPERATURE not in kwargs:
                 return
             temp = kwargs[ATTR_TEMPERATURE]
             tenths = int(round(temp * 10))
-            await self.coordinator.send_command(f"TSTAT_00 SET_TEMP_SP={tenths:04d}")
+            await self.coordinator.send_command(f"{self.zone} SET_TEMP_SP={tenths:04d}")
 
     async def async_set_hvac_mode(self, hvac_mode: HVACMode) -> None:
         """Set a new HVAC mode."""
         mode_map = {"off": "00", "heat": "01", "cool": "02", "heat_cool": "03"}
         mode = mode_map.get(hvac_mode, "01")
-        await self.coordinator.send_command(f"TSTAT_00 SET_HVAC_MODE={mode}")
+        await self.coordinator.send_command(f"{self.zone} SET_HVAC_MODE={mode}")
 
     async def async_set_fan_mode(self, fan_mode: str) -> None:
         """Set a new fan mode."""
         mode_val = FAN_MODE_REVERSE.get(fan_mode, 0)
-        await self.coordinator.send_command(f"TSTAT_00 SET_FAN_MODE={mode_val:02d}")
+        await self.coordinator.send_command(f"{self.zone} SET_FAN_MODE={mode_val:02d}")
