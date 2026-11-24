@@ -91,6 +91,30 @@ def test_native_range_survives_mode_switch(coordinator):
 
 
 @pytest.mark.parametrize(
+    ("state", "relays", "expected"),
+    [
+        ("00", (False, False, False), "idle"),
+        ("01", (True, False, False), "fan"),
+        ("03", (True, True, False), "heating"),
+        ("02", (True, False, True), "cooling"),
+        ("99", (False, False, False), None),
+    ],
+)
+def test_verified_action_states_are_zone_local(coordinator, state, relays, expected):
+    """Replay verified .45 states without inferring actions from shared relays."""
+    coordinator._parse_line(b"TSTAT_01 SET_HVAC_MODE=01")
+    coordinator._parse_line(b"TSTAT_01 SET_HVAC_STATE=03")
+    coordinator._parse_line(b"TSTAT_00 SET_HVAC_MODE=03")
+    coordinator._parse_line(f"TSTAT_00 SET_HVAC_STATE={state}".encode())
+    for relay, active in zip(("g", "w1", "y1"), relays, strict=True):
+        prefix = "SET" if active else "CLEAR"
+        coordinator._parse_line(f"{prefix}_RELAY=local-{relay}".encode())
+    assert SavantCLIClimate(coordinator).hvac_action == expected
+    assert SavantCLIClimate(coordinator, "TSTAT_01").hvac_action == "heating"
+    coordinator.send_command.assert_not_called()
+
+
+@pytest.mark.parametrize(
     ("records", "kwargs", "commands"),
     [
         ([], {"temperature": 71.5}, ["SET_TEMP_SP=0715"]),

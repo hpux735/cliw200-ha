@@ -14,8 +14,9 @@ HVAC_MODES = {
 
 HVAC_ACTIONS = {
     "00": "idle",
-    "01": "heating",
+    "01": "fan",
     "02": "cooling",
+    "03": "heating",
 }
 
 FAN_MODES = {

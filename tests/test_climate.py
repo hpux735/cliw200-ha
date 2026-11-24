@@ -83,8 +83,16 @@ class TestSavantCLIClimate:
         assert self._climate().hvac_mode == "heat_cool"
 
     def test_hvac_action_heating(self) -> None:
-        self.data.hvac_state = "01"
+        self.data.hvac_state = "03"
         assert self._climate().hvac_action == "heating"
+
+    def test_hvac_action_fan_only(self) -> None:
+        self.data.hvac_state = "01"
+        assert self._climate().hvac_action == "fan"
+
+    def test_hvac_action_unknown(self) -> None:
+        self.data.hvac_state = "99"
+        assert self._climate().hvac_action is None
 
     def test_hvac_action_cooling(self) -> None:
         self.data.hvac_state = "02"

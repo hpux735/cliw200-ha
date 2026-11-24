@@ -17,7 +17,7 @@ the unauthenticated TCP telemetry stream (port 2000).
 - Comfort band (tolerance) on single-setpoint models exposed as heat/cool range
 - HVAC modes: Off, Heat, Cool, Auto (heat/cool)
 - Fan modes: On, Auto, Cycle
-- Current HVAC action: idle, heating, cooling
+- Current HVAC action: idle, fan-only, heating, cooling
 - Automatic mDNS/zeroconf discovery
 - Separate climate entities for each controller zone, with reported zone names
 - Per-zone Home Assistant name and area selection during setup
@@ -129,6 +129,12 @@ changes settings. No authentication is required on the telemetry port.
 
 See [`REVERSE_ENGINEERING.md`](REVERSE_ENGINEERING.md) for full protocol
 documentation and the discovery process.
+
+The verified `HVAC_STATE` values are `00` = idle, `01` = fan-only,
+`02` = cooling, and `03` = heating. Configured Heat mode alone does not mean
+the heater is running. Actions use each zone's state, not controller-wide relay
+records or stage fields that can remain stale after equipment stops. Unknown
+state codes are left unknown rather than guessed to be idle.
 
 ## Use cases
 

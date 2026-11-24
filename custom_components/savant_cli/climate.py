@@ -177,8 +177,8 @@ class SavantCLIClimate(ClimateEntity):
         """Return the current HVAC action."""
         if self.data.hvac_mode == "00":
             return HVACAction.OFF
-        action = HVAC_ACTIONS.get(self.data.hvac_state, "idle")
-        return HVACAction(action)
+        action = HVAC_ACTIONS.get(self.data.hvac_state)
+        return HVACAction(action) if action is not None else None
 
     @property
     def fan_mode(self) -> str | None:

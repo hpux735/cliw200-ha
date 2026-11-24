@@ -172,8 +172,9 @@ class TestTelemetryParsing:
     def test_hvac_action_mapping(self) -> None:
         """Test that HVAC action strings map correctly."""
         assert HVAC_ACTIONS["00"] == "idle"
-        assert HVAC_ACTIONS["01"] == "heating"
+        assert HVAC_ACTIONS["01"] == "fan"
         assert HVAC_ACTIONS["02"] == "cooling"
+        assert HVAC_ACTIONS["03"] == "heating"
 
     def test_dual_setpoint_parse(self, fresh_data: SavantCLIData) -> None:
         """Test parsing native dual-setpoint TSTAT records."""

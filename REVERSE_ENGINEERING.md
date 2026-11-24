@@ -127,7 +127,7 @@ See [`AGENTS.md`](AGENTS.md) for the auditing rules that govern this repo.
    | `SET_HUMIDITY` | Current humidity | tenths % | `0446` = 44.6% |
    | `SET_HUMIDITY_SP` | Humidity setpoint | tenths % | `0100` = 10.0% |
    | `SET_HVAC_MODE` | HVAC mode | `00`=Off, `01`=Heat, `02`=Cool, `03`=Auto |
-   | `SET_HVAC_STATE` | HVAC running state | `00`=Idle, `01`=Heating, `02`=Cooling |
+   | `SET_HVAC_STATE` | HVAC running state (corrected by controlled test below) | `00`=Idle, `01`=Fan-only, `02`=Cooling, `03`=Heating |
    | `SET_FAN_MODE` | Fan mode | `0`=Auto, `1`=On |
    | `SET_FAN_STAGE` | Fan speed stage | integer |
    | `SET_NAME` | Thermostat name | string (e.g. `Home`) |
@@ -596,6 +596,122 @@ while runtime discovery continues to add zones later.
   during forms, abort cleanup, partial errors, and reconfiguration. All network
   connections in these tests are mocked. Neither thermostat was accessed for
   this change; no commands or setting changes were made.
+
+## Controlled HVAC-state test on .45
+
+Driving prompts (verbatim):
+
+> On .49 zone TSTAT_00, the fan just turned on, and the home assistant integration thinks it's heating.  Why is that?
+
+> perhaps we got that wrong about the STATE.  Let's run a test on the .45 thermostat...
+
+### Preliminary read-only observation
+
+A passive 40-second capture on `.49` showed zone zero in Heat mode (`01`) and
+Fan Cycle (`02`), with `HVAC_STATE=01`. The RS-485 `g` relay was set while
+`w1` and `y1` were clear. No commands or settings were sent to `.49`. This
+contradicted the integration's original inference that state `01` meant
+heating and motivated the explicitly authorized controlled test on `.45`.
+
+### Identity and baseline
+
+Before any writes, fetched `.45`'s `/info` and required UUID
+`24CD8D83D6FC006B` (serial `BT5241101101`, CLI-W220W-00, firmware
+`4.0.7-nightly.60991`). The test script refused to write if that UUID differed.
+Captured a fresh 35-second baseline and saved all required visible settings:
+
+```text
+TSTAT_00 SET_HVAC_MODE=03
+TSTAT_00 SET_FAN_MODE=00
+TSTAT_00 SET_TEMP_SP=0700
+TSTAT_00 SET_TEMP_TOLERANCE=0030
+TSTAT_00 SET_TEMP=0725
+TSTAT_00 SET_HVAC_STATE=01
+SET_RELAY=local-g
+CLEAR_RELAY=local-w1
+CLEAR_RELAY=local-y1
+```
+
+This is Auto mode, Fan On, a 70 F setpoint and +/-3 F tolerance at 72.5 F
+room temperature. Only the fan output was active.
+
+### Test sequence and results
+
+All changes below used `TSTAT_00 SET_<field>=<value>` on **.45 only**.
+No direct relay commands were sent. This is an active test on the spare
+thermostat, not a claim of passive investigation.
+
+| Test phase | Commands / conditions | Observed state | g | w1 | y1 |
+|------------|-----------------------|----------------|---|----|----|
+| Original baseline | Auto, Fan On, SP 70 F, band +/-3 F | `01` | On | Off | Off |
+| Auto idle, 15 s | `SET_FAN_MODE=01` | `00` | Off | Off | Off |
+| Heat idle, 15 s | `SET_HVAC_MODE=01`, then `SET_TEMP_SP=0600`, Fan Auto | `00` | Off | Off | Off |
+| Heat mode, fan-only, 15 s | `SET_FAN_MODE=00`, SP still 60 F | `01` | On | Off | Off |
+| Heat demand, 35 s | `SET_FAN_MODE=01`, `SET_TEMP_SP=0850` | `03` | On | On | Off |
+| Entry into Cool mode | Restore Heat SP observed on entry (`0670`), then `SET_HVAC_MODE=02` | `02` | On | Off | On |
+| Cool idle, 15 s | `SET_TEMP_SP=0850`, Fan Auto | `00` | Off | Off | Off |
+| Subsequent cool demand, 35 s | `SET_TEMP_SP=0600`, Fan Auto | `00` throughout this window | Off | Off | Off |
+
+Active heating was accompanied by `SET_HEAT_STAGE=1` and
+`SET_COOL_STAGE=0`; entry into cooling produced `SET_COOL_STAGE=1` and
+`SET_HEAT_STAGE=0`. **Stage fields were not reliable current activity:**
+`COOL_STAGE=1` persisted after the cooling relay cleared and state became
+`00`. The later cooling demand did not restart the compressor during the
+35-second window. A minimum-off timer is a possibility, not a verified cause.
+Cooling state `02` is established by the earlier simultaneous state, stage,
+and active relay observation, not by that unsuccessful later demand.
+
+The requested Heat SP of `0850` was reported as `0830` during heating, and
+tolerance later reported `0020` instead of baseline `0030`. The cause was not
+isolated; these results are not a verification that setpoint or comfort-band
+writes round-trip exactly. Mode switches also changed the reported SP. Do not
+infer independent persistent per-mode configuration values from these reads.
+
+### Restoration
+
+The script saved the SP reported upon entering Heat (`0670`) and Cool
+(`0700`) before overwriting either. Its `finally` block revisited those modes
+and restored those observed values, then restored original Auto mode (`03`),
+SP (`0700`), and Fan On (`00`). Its restoration assertion correctly detected
+that tolerance was still `0020`, so restoration was **not initially complete**.
+
+Immediately followed up on `.45` with `SET_TEMP_TOLERANCE=0030` and
+`SET_TEMP_SP=0700`. The response confirmed the original four visible settings.
+A separate passive 35-second capture then confirmed:
+
+```text
+HVAC_MODE=03
+FAN_MODE=00
+TEMP_SP=0700
+TEMP_TOLERANCE=0030
+HVAC_STATE=01
+local-g on; local-w1 off; local-y1 off
+```
+
+Restoration is verified for those visible settings and outputs, not for an
+unread authenticated configuration file. No setting changes were made to the
+house thermostat `.49`.
+
+### Corrected interpretation and integration changes
+
+The verified enumeration for this firmware is:
+
+| Raw state | Home Assistant action |
+|-----------|-----------------------|
+| `00` | Idle |
+| `01` | Fan-only (`fan`) |
+| `02` | Cooling |
+| `03` | Heating |
+
+This corrects the original `01` = Heating assumption. These values are treated
+as observed enumeration values, not an inferred bitmask. The integration now
+maps them per zone; shared controller relay records are not used to assign
+actions to arbitrary zones. Unknown raw state values remain unknown rather
+than being silently presented as Idle. Existing Off-mode handling is unchanged.
+
+Added regressions for fan-only, heating, unknown states, and production-parser
+replays with independent zones. Full suite: **126 passed** against Home
+Assistant 2024.12.5 libraries. Manifest version incremented to **0.2.1**.
 
 ## Flagged changes (code not directly paired with a prompt)
 
